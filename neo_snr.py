@@ -3,6 +3,7 @@
 import numpy as n
 import matplotlib.pyplot as plt
 import scipy.constants as c
+import neo_cat
 
 class radar:
     def __init__(self,gain,tx_pwr,duty_cycle,wavelength,noise_temp,max_coh_int_time=0.2):
@@ -59,14 +60,14 @@ def incoh_snr_calc(p_s, p_n, epsilon=0.05, B=10.0, t_incoh=3600.0):
     t_epsilon=((p_s+p_n)**2.0)/(epsilon**2.0 * p_s**2.0 * B)
 
     K=t_incoh*B
-    print(K)
+#    print(K)
     delta_pn=p_n/n.sqrt(K)
     snr_incoh = p_s/delta_pn
     
     return( snr, snr_incoh, t_epsilon )
 
 
-def detectability(r,o, t_obs=3600.0):
+def detectability(r,o, t_obs=3600.0,debug=False):
     """
     r = radar
     o = object
@@ -104,16 +105,17 @@ def detectability(r,o, t_obs=3600.0):
     snr,snr_incoh,te=incoh_snr_calc(p_s,p_n1,B=incoh_int_bandwidth,t_incoh=t_obs)
     
     snr_coh=p_s/p_n0
-    
-    print("snr_coh_%1.2f_s %1.2f snr_coh_%1.2f_s %1.2f snr_incoh_%1.1f_s %1.2f required_measurement_time %1.2f dop_bw %1.2f (Hz)"%(1.0/detection_bandwidth,
-                                                                                                                                   snr_coh,
-                                                                                                                                   1.0/incoh_int_bandwidth,
-                                                                                                                                   snr,
-                                                                                                                                   t_obs,
-                                                                                                                                   snr_incoh,
-                                                                                                                                   te,
-                                                                                                                                   doppler_bandwidth))
 
+    if debug:
+        print("discover_snr_coh_%1.2f_s %1.2f track_snr_coh_%1.2f_s %1.2f snr_incoh_%1.1f_s %1.2f required_measurement_time %1.2f dop_bw %1.2f (Hz)"%(1.0/detection_bandwidth,
+                                                                                                                                                      snr_coh,
+                                                                                                                                                      1.0/incoh_int_bandwidth,
+                                                                                                                                                      snr,
+                                                                                                                                                      t_obs,
+                                                                                                                                                      snr_incoh,
+                                                                                                                                                      te,
+                                                                                                                                                      doppler_bandwidth))
+        
     return(snr_coh,snr_incoh)
 
 
@@ -125,10 +127,30 @@ if __name__ == "__main__":
               wavelength=1.3,
               noise_temp=150.0)
     
-    o = space_object(diameter_m=150.0,
-                     range_m=300000e3,
-                     spin_period_s=500.0,
+    arecibo=radar(gain=10**7.5,
+                  tx_pwr=1e6,
+                  duty_cycle=1.0,
+                  wavelength=0.125,
+                  noise_temp=50.0)
+    
+    o = space_object(diameter_m=1.0,
+                     range_m=3e8,
+                     spin_period_s=5*60,
                      radar_albedo=0.1)
 
-    
-    detectability(e3d,o, t_obs=3600.0)
+
+    LD=384400e3
+    neos=neo_cat.read_neos()
+    for neo in neos:
+#        print(neo)
+ #       print("EISCAT 3D")
+        o = space_object(diameter_m=0.5*(neo["d_min"]+neo["d_max"]),
+                         range_m=LD*neo["dist_ld"],
+                         spin_period_s=5*60,
+                         radar_albedo=0.1)
+        
+        snr_coh,snr_incoh=detectability(e3d,o, t_obs=3600.0)
+        if snr_incoh > 1.0:
+            print("%s dist_ld %1.2f snr_coh %1.2f snr_incoh %1.2f"%(neo["name"],neo["dist_ld"],snr_coh,snr_incoh))
+        
+        
