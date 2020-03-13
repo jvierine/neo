@@ -30,7 +30,7 @@ def read_neos(fname="cneos_closeapproach_data.csv"):
         n_par=len(diam)
         d_max=float(diam[n_par-2])
 #        print("%s %1.2f %1.2f-%1.2f"%(name,dist_ld,d_min,d_max))
-        n_list.append({"name":name,"date":date,"d_min":d_min,"d_max":d_max,"dist_ld":dist_ld})
+        n_list.append({"name":name,"date":date,"d_min":d_min,"d_max":d_max,"dist_ld":dist_ld,"ymd":ymd,"hour":hour})
     return(n_list)
 
 

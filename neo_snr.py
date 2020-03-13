@@ -3,7 +3,12 @@
 import numpy as n
 import matplotlib.pyplot as plt
 import scipy.constants as c
+import datetime
+import stuffr
+import re
+
 import neo_cat
+import neo_horizons
 
 class radar:
     def __init__(self,gain,tx_pwr,duty_cycle,wavelength,noise_temp,max_coh_int_time=0.2):
@@ -119,13 +124,19 @@ def detectability(r,o, t_obs=3600.0,debug=False):
     return(snr_coh,snr_incoh)
 
 
-if __name__ == "__main__":
-
+def check_radars():
+    
     e3d=radar(gain=10**4.3,
               tx_pwr=5e6,
               duty_cycle=0.25,
               wavelength=1.3,
               noise_temp=150.0)
+    
+    uhf=radar(gain=10**4.8,
+              tx_pwr=1.7e6,
+              duty_cycle=0.125,
+              wavelength=0.32,
+              noise_temp=80.0)
     
     arecibo=radar(gain=10**7.5,
                   tx_pwr=1e6,
@@ -133,24 +144,150 @@ if __name__ == "__main__":
                   wavelength=0.125,
                   noise_temp=50.0)
     
-    o = space_object(diameter_m=1.0,
-                     range_m=3e8,
+    dists=10**n.linspace(2,9,num=100)
+    
+    o = space_object(diameter_m=2,
+                     range_m=3.6e5*1e3,
                      spin_period_s=5*60,
                      radar_albedo=0.1)
 
+    print("EISCAT")
+    snr_coh,snr_incoh=detectability(uhf,o, t_obs=3600.0)
+    print(snr_coh)
+    print(snr_incoh)
 
+    print("Arecibo")
+    snr_coh,snr_incoh=detectability(arecibo,o, t_obs=3600.0)
+    print(snr_coh)
+    print(snr_incoh)
+
+
+def arecibo_radar():
+    return(radar(gain=10**7.5,
+                 tx_pwr=1e6,
+                 duty_cycle=1.0,
+                 wavelength=0.125,
+                 noise_temp=50.0))
+
+def e3d_radar():
+    return(radar(gain=10**4.3,
+                 tx_pwr=5e6,
+                 duty_cycle=0.25,
+                 wavelength=1.3,
+                 noise_temp=150.0))
+def uhf_radar():
+    return(radar(gain=10**4.8,
+                 tx_pwr=1.8e6,
+                 duty_cycle=0.125,
+                 wavelength=0.32,
+                 noise_temp=90.0))
+    
+           
+    
+def catalog_check(r,
+                  planar_array=True,
+                  time_window=2*24*3600.0,
+                  fname="cneos_closeapproach_data_past.csv",
+                  debug=False):
+
+    """ 
+    go through catalog
+    check is object can be detected at closest distance
+    if yes, check using horizons if it is above horizon and at a detectable range.
+    """
+    gain0=r.gain
+    
+    
+    
     LD=384400e3
-    neos=neo_cat.read_neos()
+    neos=neo_cat.read_neos(fname=fname)
+    det_r=[]
+    det_d=[]
     for neo in neos:
-#        print(neo)
- #       print("EISCAT 3D")
+
         o = space_object(diameter_m=0.5*(neo["d_min"]+neo["d_max"]),
                          range_m=LD*neo["dist_ld"],
                          spin_period_s=5*60,
                          radar_albedo=0.1)
         
-        snr_coh,snr_incoh=detectability(e3d,o, t_obs=3600.0)
-        if snr_incoh > 1.0:
-            print("%s dist_ld %1.2f snr_coh %1.2f snr_incoh %1.2f"%(neo["name"],neo["dist_ld"],snr_coh,snr_incoh))
+        snr_coh,snr_incoh=detectability(r,o, t_obs=3600.0)
+
+        name=re.search(".*\((.*)\)",neo["name"]).group(1)
+        
+        if snr_incoh > 10.0:
+            # we may have a chance. let's look at elevation and observability using a real ephemeris
+            if debug:
+                print("%s min_dist_ld %1.2f max_snr_coh %1.2f max_snr_incoh %1.2f"%(name,neo["dist_ld"],snr_coh,snr_incoh))
+
+            # I hate datetime calculations. I'm pretty sure this only works if your computer timezone is UTC
+            # this is not production code, so I'm not going to bother to figure out how to do this more
+            # generally.
+            d0=datetime.datetime.strptime("%s %s"%(neo["ymd"],neo["hour"]), "%Y-%b-%d %H:%M")
+            timestamp = (d0-datetime.datetime(1970,1,1)).total_seconds()
+            d0=stuffr.unix2date(timestamp-time_window)
+            d1=stuffr.unix2date(timestamp+time_window)
+            start_t=d0.strftime('%Y-%m-%d %H:%M')
+            stop_t=d1.strftime('%Y-%m-%d %H:%M')
+
+            # get ephemeris during an observing window around closest approach
+            h_ranges,h_range_rates,h_els,h_dates= neo_horizons.check_detectability(obj_id=name,
+                                                                                   start=start_t,
+                                                                                   stop=stop_t,
+                                                                                   step="1h")
+            
+            n_obs=len(h_ranges)
+            max_snr=0
+            min_dist=0
+            max_el=0
+            max_date=""
+            for oi in range(n_obs):
+                o.range_m=h_ranges[oi]
+                if planar_array:
+                    r.gain=gain0*n.sin(n.pi*h_els[oi]/180.0)
+                
+                m_snr_coh,m_snr_incoh=detectability(r,o, t_obs=3600.0)
+
+                if snr_incoh > 10:
+                    if m_snr_incoh > max_snr:
+                        max_snr=m_snr_incoh
+                        min_dist=h_ranges[oi]/LD
+                        max_el=h_els[oi]
+                        max_date=h_dates[oi]
+                        #                    print("%s dist_ld %1.2f snr_coh %1.2f snr_incoh/hour %1.2f"%(name,h_ranges[oi]/LD,m_snr_coh,m_snr_incoh))
+            if max_snr > 10.0:
+                print("-> %s %s min_dist_ld %1.2f elevation %1.2f snr_incoh/hour %1.2f"%(name,max_date,min_dist,max_el,max_snr))
+            if debug:
+                print("----")
+        else:
+            if debug:
+                print("%s not observable"%(name))
+#                    print("%s dist_ld %1.2f snr_coh %1.2f snr_incoh %1.2f diam %1.1f-%1.1f m"%(neo["name"],neo["dist_ld"],snr_coh,snr_incoh,neo["d_min"],neo["d_max"]))
+#det_r.append(neo["dist_ld"]*LD)
+ #               det_d.append(0.5*(neo["d_min"]+neo["d_max"]))
+  #  det_r=n.array(det_r)
+   # det_d=n.array(det_d)
+    
+#    plt.loglog(det_r/1e3,det_d,".")
+#    plt.xlabel("Distance (km)")
+#    plt.ylabel("Diameter (m)")
+#    plt.title("Feasible NEO tracks within MPC catalog")
+#    plt.show()
         
         
+
+if __name__ == "__main__":
+    e3d=e3d_radar()
+    uhf=uhf_radar()    
+    #    ao=arecibo_radar()
+    print("Past year")
+    print("EISCAT UHF")
+    catalog_check(uhf,planar_array=False,fname="cneos_closeapproach_data_past.csv")
+    print("EISCAT 3D")
+    catalog_check(e3d,planar_array=True,fname="cneos_closeapproach_data_past.csv")
+    
+    print("One year into future")
+    print("EISCAT UHF")
+    catalog_check(uhf,planar_array=False,fname="cneos_closeapproach_data_future.csv")
+    print("EISCAT 3D")
+    catalog_check(e3d,planar_array=True,fname="cneos_closeapproach_data_future.csv")
+    
