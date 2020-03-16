@@ -216,8 +216,8 @@ def catalog_check(r,
         
         if snr_incoh > 10.0:
             # we may have a chance. let's look at elevation and observability using a real ephemeris
-            if debug:
-                print("%s min_dist_ld %1.2f max_snr_coh %1.2f max_snr_incoh %1.2f"%(name,neo["dist_ld"],snr_coh,snr_incoh))
+            if True:
+                print("# %s min_dist_ld %1.2f max_snr_coh %1.2f max_snr_incoh %1.2f"%(name,neo["dist_ld"],snr_coh,snr_incoh))
 
             # I hate datetime calculations. I'm pretty sure this only works if your computer timezone is UTC
             # this is not production code, so I'm not going to bother to figure out how to do this more
@@ -278,7 +278,7 @@ def catalog_check(r,
 if __name__ == "__main__":
     e3d=e3d_radar()
     uhf=uhf_radar()    
-    #    ao=arecibo_radar()
+
     print("Past year")
     print("EISCAT UHF")
     catalog_check(uhf,planar_array=False,fname="cneos_closeapproach_data_past.csv")

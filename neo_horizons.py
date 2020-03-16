@@ -23,6 +23,9 @@ def check_detectability(obj_id="2020 DA4",
                            "stop":stop,
                            "step":step},id_type=id_type)
 
+#    t0=obj.ephemerides(quantities="4,20",get_raw_response=True)
+
+    
     t=obj.ephemerides(quantities="4,20",get_raw_response=False)
     if debug:
         print(t)
