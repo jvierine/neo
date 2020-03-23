@@ -206,6 +206,8 @@ def catalog_check(r,
     det_r=[]
     det_d=[]
     obs_time_times = []
+
+    n_detectable=0
     for neo in neos:
 
         o = space_object(diameter_m=0.5*(neo["d_min"]+neo["d_max"]),
@@ -223,7 +225,7 @@ def catalog_check(r,
         
         if snr_incoh > 10.0:
             # we may have a chance. let's look at elevation and observability using a real ephemeris
-            if True:
+            if False:
                 print("# %s min_dist_ld %1.2f max_snr_coh %1.2f max_snr_incoh %1.2f"%(name,neo["dist_ld"],snr_coh,snr_incoh))
 
             # I hate datetime calculations. I'm pretty sure this only works if your computer timezone is UTC
@@ -240,7 +242,7 @@ def catalog_check(r,
             h_ranges,h_range_rates,h_els,h_dates= neo_horizons.check_detectability(obj_id=name,
                                                                                    start=start_t,
                                                                                    stop=stop_t,
-                                                                                   step="1h")
+                                                                                   step="5m")
             obs_time = []
             n_obs=len(h_ranges)
             coh_max = 0
@@ -248,6 +250,8 @@ def catalog_check(r,
             min_dist=0
             max_el=0
             max_date=""
+            total_obs_time=0.0
+            total_s_obs_time=0.0            
             for oi in range(n_obs):
                 o.range_m=h_ranges[oi]
                 if planar_array:
@@ -256,6 +260,7 @@ def catalog_check(r,
                 m_snr_coh,m_snr_incoh=detectability(r,o, t_obs=3600.0)
 
                 if snr_incoh > 10:
+                    total_obs_time+=5.0
                     if m_snr_incoh > max_snr:
                         max_snr=m_snr_incoh
                         min_dist=h_ranges[oi]/LD
@@ -263,10 +268,12 @@ def catalog_check(r,
                         max_date=h_dates[oi]
                         #                    print("%s dist_ld %1.2f snr_coh %1.2f snr_incoh/hour %1.2f"%(name,h_ranges[oi]/LD,m_snr_coh,m_snr_incoh))
                     obs_time.append(h_dates[oi])
-                if m_snr_coh > coh_max:
-                        coh_max=m_snr_incoh
+                if m_snr_coh > 10.0:
+                    coh_max=m_snr_coh
+                    total_s_obs_time+=5.0
             if max_snr > 10.0:
-                print("-> %s %s min_dist_ld %1.2f elevation %1.2f snr_incoh/hour %1.2f"%(name,max_date,min_dist,max_el,max_snr))
+                n_detectable+=1
+                print("%d -> %s %s min_dist_ld %1.2f elevation %1.2f snr_coh %1.2f snr_incoh/hour %1.2f obs_time %1.2f (min) coh_obs_time %1.2f (min)"%(n_detectable,name,max_date,min_dist,max_el,coh_max,max_snr,total_obs_time,total_s_obs_time))
                 counter +=1
                 usable_list.append([name, max_date, min_dist, max_el, max_snr,neo["d_max"]]) #saves the observable ones
                 
