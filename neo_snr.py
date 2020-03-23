@@ -204,8 +204,8 @@ def catalog_check(r,
     det_r=[]
     det_d=[]
     for neo in neos:
-
-        o = space_object(diameter_m=0.5*(neo["d_min"]+neo["d_max"]),
+        diam=0.5*(neo["d_min"]+neo["d_max"])
+        o = space_object(diameter_m=diam,
                          range_m=LD*neo["dist_ld"],
                          spin_period_s=5*60,
                          radar_albedo=0.1)
@@ -216,7 +216,7 @@ def catalog_check(r,
         
         if snr_incoh > 10.0:
             # we may have a chance. let's look at elevation and observability using a real ephemeris
-            if True:
+            if False:
                 print("# %s min_dist_ld %1.2f max_snr_coh %1.2f max_snr_incoh %1.2f"%(name,neo["dist_ld"],snr_coh,snr_incoh))
 
             # I hate datetime calculations. I'm pretty sure this only works if your computer timezone is UTC
@@ -247,7 +247,7 @@ def catalog_check(r,
                 
                 m_snr_coh,m_snr_incoh=detectability(r,o, t_obs=3600.0)
 
-                if snr_incoh > 10:
+                if snr_incoh > 10 and h_els[oi] > 30.0:
                     if m_snr_incoh > max_snr:
                         max_snr=m_snr_incoh
                         min_dist=h_ranges[oi]/LD
@@ -255,7 +255,7 @@ def catalog_check(r,
                         max_date=h_dates[oi]
                         #                    print("%s dist_ld %1.2f snr_coh %1.2f snr_incoh/hour %1.2f"%(name,h_ranges[oi]/LD,m_snr_coh,m_snr_incoh))
             if max_snr > 10.0:
-                print("-> %s %s min_dist_ld %1.2f elevation %1.2f snr_incoh/hour %1.2f"%(name,max_date,min_dist,max_el,max_snr))
+                print("-> %s %s min_dist_ld %1.2f elevation %1.2f snr_incoh/hour %1.2f diam %1.2f m"%(name,max_date,min_dist,max_el,max_snr,diam))
             if debug:
                 print("----")
         else:
